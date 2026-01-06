@@ -1,0 +1,38 @@
+body {
+  margin: 0;
+}
+
+
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  scrollbar-color: #686868 #424242;
+}
+
+/* WebKit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: 8px;
+  /* Adjust width */
+  height: 8px;
+  /* Adjust height */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #686868;
+  /* Default thumb color */
+  border-radius: 4px;
+  /* Optional: Round corners */
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #888888;
+  /* Color when hovering over the thumb */
+}
+
+::-webkit-scrollbar-track {
+  background: #424242;
+  /* Scrollbar track color */
+}
