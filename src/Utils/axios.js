@@ -1,7 +1,7 @@
 import axios from "axios";
 // import { api } from "../utilitis/api";
 
-const hosturl="https://w8cxdwbc-9000.inc1.devtunnels.ms"
+const hosturl="http://3.111.168.56:9000"
 const getRequest = async (url, data) => {
     try {
         const response = await axios.get(
