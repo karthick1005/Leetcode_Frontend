@@ -1,4 +1,4 @@
-import { Layout, Model } from "flexlayout-react";
+import { Layout, Model,Actions,DockLocation } from "flexlayout-react";
 import "flexlayout-react/style/light.css";
 import React, { useEffect, useState } from "react";
 import {
@@ -27,13 +27,16 @@ import CodeEditor from "../../components/CodeEditor/CodeEditor";
 import Description from "../../components/Description/Description";
 import Testcase from "../../components/Testcase/Testcase";
 import TestResult from "../../components/TestResult/TestResult";
+import Submissions from "../../components/Submissions/Submissions";
 import test from "./des.json";
 import "./Problempage.css";
-import { collection, doc, getDoc } from "firebase/firestore";
+import { collection, doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../../Utils/Firebase";
 import { useNavigate, useParams } from "react-router-dom";
 import { getRequest, postRequest } from "../../Utils/axios";
 import { showerror } from "../../Utils/toast";
+import { saveCode, loadCode } from "../../Utils/indexedDB";
+import SubmissionDetails from "../../components/Submissions/SubmissionDetails/SubmissionDetails";
 const Problempage = () => {
   var json = {
     global: {},
@@ -54,20 +57,23 @@ const Problempage = () => {
             {
               type: "tab",
               name: "Editorial",
+              component: "Editorial",
               enableClose: false,
             },
             {
               type: "tab",
               name: "Solutions",
+              component: "Solutions",
               enableClose: false,
             },
             {
               type: "tab",
               name: "Submissions",
+              component: "Submissions",
               enableClose: false,
             },
           ],
-          active: true,
+          // active: true,
         },
         {
           type: "row",
@@ -115,6 +121,7 @@ const Problempage = () => {
   };
 
   const navigate = useNavigate();
+  const { Id } = useParams();
   const uid = auth.currentUser?.uid;
   const [foldedTabSets, setFoldedTabSets] = useState({});
   const [model, setModel] = useState(Model.fromJson(json));
@@ -122,12 +129,64 @@ const Problempage = () => {
   const [Code, setcode] = useState(null);
   const [Testcases, setTestcases] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [language, setlanguage] = useState("javascript");
+  const [language, setlanguage] = useState(() => {
+    // Initialize language from localStorage
+    const savedLanguage = localStorage.getItem("lastLanguage");
+    return savedLanguage || "javascript";
+  });
   const [currentcode, setcurrentcode] = useState("");
   const [running, setrunning] = useState(false);
   const [Executeresult, setExecuteresult] = useState(null);
   const [cooldown, setcooldown] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
+
+const handleSubmissionClick = (submission) => {
+  console.log("Submission clicked:", submission);
+
+  setSelectedSubmission(submission);
+
+  const layoutJson = model.toJson();
+  const tabset = model.getRoot().getChildren()[0];
+
+  const testResultTabNode = findTabNodeByName(layoutJson.layout, "Code");
+  const node = model.getNodeById(testResultTabNode.id);
+
+  const parentTabset = node.getParent() || tabset;
+
+  // use submission id as unique tab id
+  const existingTab = model.getNodeById("SubmissionDetail");
+
+  if (existingTab) {
+    // update tab name
+    model.doAction(
+      Actions.renameTab(existingTab.getId(), submission.status)
+    );
+
+    // focus the tab
+    model.doAction(Actions.selectTab(existingTab.getId()));
+    return;
+  }
+
+  // create new tab
+  model.doAction(
+    Actions.addNode(
+      {
+        id: "SubmissionDetail",
+        type: "tab",
+        name: submission.status,
+        component: "SubmissionDetail",
+        // componentState: submission,
+        enableClose: true,
+      },
+      parentTabset.getId(),
+      DockLocation.CENTER,
+      -1
+    )
+  );
+};
+
   const onRenderTab = (node, renderValues) => {
+    console.log("Rendering tab:", node.renderedName,node.getComponent?.());
     if (node.renderedName === "Code") {
       renderValues.content = (
         <div className="relative flex items-center gap-1 overflow-hidden text-sm capitalize">
@@ -202,7 +261,18 @@ const Problempage = () => {
           {renderValues.content}
         </div>
       );
-    }
+    } else if (node.getComponent?.() === "SubmissionDetail") {
+    renderValues.content = (
+      <div className="relative flex items-center ml-4 gap-3 text-sm capitalize">
+        <div className="relative text-[14px] leading-[normal] p-[1px] text-[#007bff]">
+          <SubmissionIcon />
+        </div>
+        {renderValues.content}
+      </div>
+    );
+  }
+
+    
   };
   const onRenderTabSet = (tabSetNode, renderValues) => {
     const tabSetId = tabSetNode.getId();
@@ -283,26 +353,57 @@ const Problempage = () => {
     setModel(Model.fromJson(layoutJson));
   };
   const factory = (node) => {
-    var component = node.getComponent();
-    if (component === "Codeeditor") {
-      return (
-        <CodeEditor
-          code={Code}
-          setcurrentcode={setcurrentcode}
-          language={language}
-          setlanguage={setlanguage}
-        />
-      );
-    } else if (component === "TestResult") {
-      return (
-        <TestResult data={Executeresult} quesdata={data} Loading={running} />
-      );
-    } else if (component === "Description") {
-      return <Description data={data} />;
-    } else if (component === "Testcase") {
-      return (
-        <Testcase data={data} testcase={Testcases} settestcase={setTestcases} />
-      );
+    // Try multiple ways to get component
+    let component = node.getComponent?.();
+    
+    // If getComponent returns undefined, check the attributes object
+    if (!component && node.attributes) {
+      component = node.attributes.component;
+    }
+    
+
+    switch(component) {
+      case "Codeeditor":
+        return (
+          <CodeEditor
+            code={Code}
+            setcurrentcode={setcurrentcode}
+            language={language}
+            setlanguage={setlanguage}
+          />
+        );
+      case "TestResult":
+        return (
+          <TestResult data={Executeresult} quesdata={data} Loading={running} />
+        );
+      case "Description":
+        return <Description data={data} />;
+      case "Testcase":
+        return (
+          <Testcase data={data} testcase={Testcases} settestcase={setTestcases} />
+        );
+      case "Submissions":
+        return <Submissions problemId={Id} onSubmissionClick={handleSubmissionClick} />;
+      case "Editorial":
+        return (
+          <div style={{ padding: "20px", color: "#a0a0a0" }}>
+            Editorial content coming soon
+          </div>
+        );
+      case "Solutions":
+        return (
+          <div style={{ padding: "20px", color: "#a0a0a0" }}>
+            Solutions content coming soon
+          </div>
+        );
+      case "SubmissionDetail":
+        return <SubmissionDetails selectedSubmission={selectedSubmission} />;
+      default:
+        return (
+          <div style={{ padding: "20px", color: "#a0a0a0", textAlign: "center" }}>
+            <div>Component not found for: {node.getName?.()}</div>
+          </div>
+        );
     }
   };
   const fetchquestion = async () => {
@@ -321,17 +422,99 @@ const Problempage = () => {
       setTestcases(value.SampleTestcase);
       console.log(value.Defaultcode);
       document.title = value.Title + " - LeetCode";
+
+      // Load saved code from IndexedDB for the current language
+      try {
+        const savedData = await loadCode(Id, language);
+        if (savedData && savedData.code) {
+          console.log(`Restoring ${language} code from IndexedDB`,savedData.code);
+          setcurrentcode(savedData.code);
+          // Update the Code state to reflect the saved code
+          setcode(prev => ({
+            ...prev,
+            [language]: savedData.code
+          }));
+        } else {
+          // If no saved code, use default code and save it to IndexedDB
+          const defaultCode = value.Defaultcode[language] || "";
+          console.log(`Using default ${language} code and saving to IndexedDB`);
+          setcurrentcode(defaultCode);
+          // Save the default code to IndexedDB
+          try {
+            await saveCode(Id, defaultCode, language);
+            console.log(`Default ${language} code saved to IndexedDB`);
+          } catch (error) {
+            console.error("Error saving default code to IndexedDB:", error);
+          }
+        }
+      } catch (error) {
+        console.error("Error loading saved code:", error);
+        // Fallback to default code and save it
+        const defaultCode = value.Defaultcode[language] || "";
+        setcurrentcode(defaultCode);
+        
+        try {
+          await saveCode(Id, defaultCode, language);
+          console.log(`Default ${language} code saved to IndexedDB`);
+        } catch (error) {
+          console.error("Error saving default code to IndexedDB:", error);
+        }
+      }
+
       setLoading(false);
     }
     // const docsnap=await getDoc(query(collection(db, "problemset"), where("Title", "==", "Two Sum")))
   };
-  const { Id } = useParams();
   useEffect(() => {
     console.log(Id);
-    // console.log(test);
     fetchquestion();
-  }, []);
+  }, [language]);
+
+  // Instantly load saved code when language changes
+  useEffect(() => {
+    if (!Id) return;
+
+    const loadSavedCode = async () => {
+      try {
+        const savedData = await loadCode(Id, language);
+        if (savedData && savedData.code) {
+          console.log(`Instantly restoring ${language} code from IndexedDB`);
+          setcurrentcode(savedData.code);
+          setcode(prev => ({
+            ...prev,
+            [language]: savedData.code
+          }));
+        }
+      } catch (error) {
+        console.error("Error loading saved code:", error);
+      }
+    };
+
+    // Load saved code instantly before fetchquestion runs
+    loadSavedCode();
+  }, [language, Id]);
+
+  // Save language preference to localStorage
+  useEffect(() => {
+    localStorage.setItem("lastLanguage", language);
+  }, [language]);
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  // Auto-save code to IndexedDB with debouncing
+  useEffect(() => {
+    if (!currentcode || !Id) return;
+
+    const saveTimeout = setTimeout(async () => {
+      try {
+        await saveCode(Id, currentcode, language);
+        console.log("Code auto-saved to IndexedDB");
+      } catch (error) {
+        console.error("Failed to auto-save code:", error);
+      }
+    }, 1000); // Save 1 second after user stops typing
+
+    return () => clearTimeout(saveTimeout);
+  }, [currentcode, language, Id]);
 
   async function waitForCompletion(resp, interval) {
     let checkres;
@@ -349,6 +532,36 @@ const Problempage = () => {
 
     return checkres;
   }
+  const saveSubmissionToFirestore = async (submissionData) => {
+    try {
+      const submissionsRef = collection(
+        db,
+        "users",
+        uid,
+        "problemSubmissions",
+        Id,
+        "submissions"
+      );
+      const docRef = doc(submissionsRef);
+      await setDoc(docRef, {
+        ...submissionData,
+        submittedAt: serverTimestamp(),
+      });
+      console.log("Submission saved to Firestore");
+    } catch (error) {
+      console.error("Error saving submission:", error);
+    }
+  };
+
+  const getSubmissionStatus = (result) => {
+    if (!result) return "Unknown";
+    if (result.runtime_error) return "Runtime Error";
+    if (result.time_limit_exceeded) return "Time Limit Exceeded";
+    if (result.memory_exceeded) return "Memory Limit Exceeded";
+    if (result.accepted) return "Accepted";
+    return "Wrong Answer";
+  };
+
   const Sumbitcode = async (testcase) => {
     console.log(uid)
     if(uid === undefined || uid === null) {
@@ -356,13 +569,22 @@ const Problempage = () => {
       navigate("/login")
       return
     }
-    if (cooldown) {
-      showerror(
-        "You have attempted to run code too soon. Please try again in a few seconds, "
-      );
-      return;
-    }
+    // if (cooldown) {
+    //   showerror(
+    //     "You have attempted to run code too soon. Please try again in a few seconds, "
+    //   );
+    //   return;
+    // }
     setrunning(true);
+    
+    // Switch to Test Result tab
+  const layoutJson = model.toJson();
+
+const testResultTabNode = findTabNodeByName(layoutJson.layout, "Test Result");
+
+if (testResultTabNode) {
+  model.doAction(Actions.selectTab(testResultTabNode.id));
+}
     console.log(Testcases);
     let code = currentcode;
     // console.log(code);
@@ -377,19 +599,56 @@ const Problempage = () => {
     let resp = await postRequest("/submit", data);
     if (!resp.success) {
       console.log("Internal server error");
+      setrunning(false);
       return;
     }
     resp = resp.data;
     console.log(resp);
+    let finalResult = null;
     if (resp.status == "ok") {
       console.log("hello");
       const result = await waitForCompletion(resp, 5);
-      setExecuteresult(result?.data);
+      finalResult = result?.data;
+      setExecuteresult(finalResult);
       console.log("Final result:", result);
+
+      // Save submission to Firestore
+      const status = getSubmissionStatus(finalResult);
+      const submissionData = {
+        code: code,
+        language: language,
+        status: status,
+        result: finalResult,
+        runtime: finalResult?.runtime || "N/A",
+        memory: finalResult?.memory || "N/A",
+        testsPassed: finalResult?.testsPassed 
+          ? `${finalResult.testsPassed}/${finalResult.totalTests || finalResult.testsPassed}`
+          : "N/A",
+      };
+      
+      await saveSubmissionToFirestore(submissionData);
     }
     setcooldown(true);
     setrunning(false);
     setTimeout(() => setcooldown(false), 10 * 1000);
+  };
+
+  // Helper function to find a tab node by name
+  const findTabNodeByName = (node, tabName) => {
+    if (node.name === tabName && node.type === "tab") {
+      return node;
+    }
+
+    if (node.children) {
+      for (let child of node.children) {
+        const found = findTabNodeByName(child, tabName);
+        if (found) {
+          return found;
+        }
+      }
+    }
+
+    return null;
   };
   if (loading) {
     return (

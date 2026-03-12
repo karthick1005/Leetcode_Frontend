@@ -1,7 +1,7 @@
 import axios from "axios";
 // import { api } from "../utilitis/api";
 
-const hosturl="/api"
+const hosturl="http://localhost:9000"
 const getRequest = async (url, data) => {
     try {
         const response = await axios.get(
