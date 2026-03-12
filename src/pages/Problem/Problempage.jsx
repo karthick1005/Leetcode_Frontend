@@ -516,19 +516,36 @@ const handleSubmissionClick = (submission) => {
     return () => clearTimeout(saveTimeout);
   }, [currentcode, language, Id]);
 
-  async function waitForCompletion(resp, interval) {
+  async function waitForCompletion(submissionId, interval) {
     let checkres;
+    let attempts = 0;
+    const maxAttempts = 30; // Max 5 minutes with 10s interval
 
     do {
-      const response = await getRequest(resp.data);
-      checkres = response.data;
-      console.log(checkres);
+      const response = await getRequest(`/submissions/${submissionId}`);
+      if (!response.success) {
+        console.error("Failed to fetch submission status");
+        break;
+      }
+      
+      // Handle new data format - response.data.data or response.data
+      checkres = response.data?.data || response.data;
+      console.log("Submission status:", checkres);
 
-      if (checkres?.status === "Processing") {
-        console.log("hello");
+      // Check if submission is complete using new state field
+      const currentState = checkres?.state || checkres?.status;
+      const isProcessing = currentState === "Processing" || currentState === "queued";
+      
+      if (currentState && !isProcessing) {
+        console.log("Submission complete:", currentState);
+        break;
+      }
+      
+      attempts++;
+      if (attempts < maxAttempts) {
         await delay(interval * 1000);
       }
-    } while (checkres?.status === "Processing");
+    } while (attempts < maxAttempts && (!checkres?.state && !checkres?.status || checkres?.state === "Processing" || checkres?.state === "queued" || checkres?.status === "Processing" || checkres?.status === "queued"));
 
     return checkres;
   }
@@ -569,51 +586,73 @@ const handleSubmissionClick = (submission) => {
       navigate("/login")
       return
     }
-    // if (cooldown) {
-    //   showerror(
-    //     "You have attempted to run code too soon. Please try again in a few seconds, "
-    //   );
-    //   return;
-    // }
     setrunning(true);
     
     // Switch to Test Result tab
-  const layoutJson = model.toJson();
+    const layoutJson = model.toJson();
+    const testResultTabNode = findTabNodeByName(layoutJson.layout, "Test Result");
 
-const testResultTabNode = findTabNodeByName(layoutJson.layout, "Test Result");
+    if (testResultTabNode) {
+      model.doAction(Actions.selectTab(testResultTabNode.id));
+    }
 
-if (testResultTabNode) {
-  model.doAction(Actions.selectTab(testResultTabNode.id));
-}
-    console.log(Testcases);
     let code = currentcode;
-    // console.log(code);
+    
+    // Prepare testcases in the format the backend expects
+    let testcases = [];
+    if (Testcases && typeof Testcases === 'string') {
+      // If Testcases is a JSON string, parse it
+      try {
+        testcases = typeof Testcases === 'string' ? JSON.parse(Testcases) : Testcases;
+      } catch (e) {
+        testcases = [];
+      }
+    } else if (Array.isArray(Testcases)) {
+      testcases = Testcases;
+    }
+
+    // New data format for backend API
     let data = {
-      src: code,
-      stdin: Testcases,
-      lang: language,
-      timeout: 1,
-      testcase: testcase,
-      quesId: "oeaUY3h1krO3b4YcqhuQ",
+      problemId: Id || "test-problem",
+      language: language,
+      userId: uid,
+      code: code,
+      testcases: testcases,
+      quesId:Id || "test-problem"
     };
+
+    console.log("Submitting to backend:", data);
     let resp = await postRequest("/submit", data);
+    
     if (!resp.success) {
-      console.log("Internal server error");
+      console.error("Submission failed:", resp.error);
+      showerror("Failed to submit code");
       setrunning(false);
       return;
     }
-    resp = resp.data;
-    console.log(resp);
-    let finalResult = null;
-    if (resp.status == "ok") {
-      console.log("hello");
-      const result = await waitForCompletion(resp, 5);
-      finalResult = result?.data;
-      setExecuteresult(finalResult);
-      console.log("Final result:", result);
 
-      // Save submission to Firestore
-      const status = getSubmissionStatus(finalResult);
+    const respData = resp.data?.data;
+    console.log("Backend response:", respData);
+    
+    if (!respData || !respData.submissionId) {
+      console.error("Invalid response from backend");
+      showerror("Invalid response from backend");
+      setrunning(false);
+      return;
+    }
+
+    const submissionId = respData.submissionId;
+    console.log("Submission ID:", submissionId);
+
+    // Poll for completion
+    const finalResult = await waitForCompletion(submissionId, 2); // Poll every 2 seconds
+    
+    if (finalResult) {
+      setExecuteresult(finalResult);
+      console.log("Final result:", finalResult);
+
+      // Save submission to Firestore with new result structure
+      const status = finalResult.status || "Unknown";
       const submissionData = {
         code: code,
         language: language,
@@ -621,13 +660,16 @@ if (testResultTabNode) {
         result: finalResult,
         runtime: finalResult?.runtime || "N/A",
         memory: finalResult?.memory || "N/A",
-        testsPassed: finalResult?.testsPassed 
-          ? `${finalResult.testsPassed}/${finalResult.totalTests || finalResult.testsPassed}`
-          : "N/A",
+        testsPassed: finalResult?.passed 
+          ? `${finalResult.passed}/${finalResult.total || finalResult.passed}`
+          : "0/0",
       };
       
       await saveSubmissionToFirestore(submissionData);
+    } else {
+      showerror("Failed to get submission result");
     }
+
     setcooldown(true);
     setrunning(false);
     setTimeout(() => setcooldown(false), 10 * 1000);

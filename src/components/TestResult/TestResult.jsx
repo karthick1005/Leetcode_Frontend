@@ -5,6 +5,41 @@ const TestResult = ({ data, quesdata, Loading }) => {
   const [activecase, setactivecase] = useState(0);
   // const [isLoading, setIsLoading] = useState(true);
 
+  // Transform data if it comes from the new format
+  const transformedData = data ? transformTestData(data) : null;
+
+  function transformTestData(rawData) {
+    // If data is already in the expected format, return as is
+    if (rawData.data && Array.isArray(rawData.data)) {
+      return rawData;
+    }
+
+    // Transform from the new format
+    if (rawData.testcases && Array.isArray(rawData.testcases)) {
+      const transformedTestcases = rawData.testcases.map((testcase, index) => ({
+        input: testcase.input.split("\n"),
+        output: testcase.output,
+        Expected: testcase.expected,
+        stdout: rawData.std_output_list ? rawData.std_output_list[index].split('\n') : [],
+        testcasestatus: testcase.passed,
+        stderr: testcase.status === "Runtime Error" ? testcase.status : ""
+      }));
+
+      return {
+        Accepted: rawData.correct_answer || false,
+        status: rawData.state === "WRONG_ANSWER" || rawData.status_msg !== "Accepted",
+        error: rawData.status_msg || "Wrong Answer",
+        runtime: rawData.elapsed_time || 0,
+        data: transformedTestcases,
+        full_runtime_error:rawData.full_runtime_error || ""
+      };
+    }
+
+    return rawData;
+  }
+
+  const displayData = transformedData || data;
+
   // useEffect(() => {
   //   if (!data) {
   //     setIsLoading(true);
@@ -13,13 +48,19 @@ const TestResult = ({ data, quesdata, Loading }) => {
   //   }
   // }, [data]);
   useEffect(() => {
-    if (data?.data[activecase]?.stdout.length >= 1) {
+    if (displayData?.data[activecase]?.stdout.length >= 1) {
       const container = document.getElementById("Stdout");
-      const totalItems = data.data[activecase].stdout.length;
-      const itemHeight = 20; // Height of each item (adjust accordingly)
+      if (!container) return;
+      
+      const totalItems = displayData.data[activecase].stdout.length;
+      console.log("Total stdout lines:", totalItems);
+      const itemHeight = 30; // Height of each item (adjust accordingly)
+      const maxHeight = 500; // Max height in pixels
       const buffer = 5; // Number of items to render above and below the viewport
 
-      container.style.height = "500px"; // Set a fixed height to enable scrolling
+      // Calculate height based on total items, capped at maxHeight
+      const calculatedHeight = Math.min(totalItems * itemHeight, maxHeight);
+      container.style.height = calculatedHeight + "px";
       container.style.overflowY = "auto";
 
       // This function will be called whenever the user scrolls
@@ -38,7 +79,7 @@ const TestResult = ({ data, quesdata, Loading }) => {
 
         // Build the HTML content for the visible range
         for (let i = start; i < end; i++) {
-          htmlContent += `<div class="font-menlo relative mx-3 whitespace-pre-wrap break-all leading-5 text-white">${data.data[activecase].stdout[i]}</div>`;
+          htmlContent += `<div class="font-menlo relative mx-3 whitespace-pre-wrap break-all leading-5 text-white">${displayData.data[activecase].stdout[i]}</div>`;
         }
 
         // Update the container's innerHTML with the visible content
@@ -51,7 +92,7 @@ const TestResult = ({ data, quesdata, Loading }) => {
       // Add scroll event listener to render items as the user scrolls
       container.addEventListener("scroll", renderVisibleItems);
     }
-  }, [data]);
+  }, [displayData]);
   const copyText = (text) => {
     navigator.clipboard.writeText(text);
   };
@@ -59,13 +100,13 @@ const TestResult = ({ data, quesdata, Loading }) => {
     <div
       className={`bg-[#262626] h-[100%] ${Loading ? "overflow-hidden" : ""}`}
     >
-      {Loading && data ? (
+      {Loading && displayData ? (
         <div className="flex flex-col gap-4 px-5 py-4 ">
           <div className="h-6 bg-[#3c3c3c] w-32 rounded animate-pulse"></div>
           <div className="h-5 bg-[#3c3c3c] w-20 rounded animate-pulse"></div>
 
           <div className="flex flex-wrap gap-2">
-            {data.data.map((_, index) => (
+            {displayData.data.map((_, index) => (
               <div
                 key={index}
                 className="h-8 w-20 bg-[#3c3c3c] rounded-lg animate-pulse"
@@ -82,32 +123,32 @@ const TestResult = ({ data, quesdata, Loading }) => {
             ))}
           </div>
         </div>
-      ) : data ? (
+      ) : displayData ? (
         <div className="flex h-full flex-col justify-between">
           <div className="flex-1 overflow-y-auto">
             <div className="space-y-4 px-5 py-4">
               <div className="flex items-center">
-                {data.Accepted ? (
+                {displayData.Accepted ? (
                   <div className="text-xl font-medium text-[#2cbb5d]">
                     Accepted
                   </div>
                 ) : (
                   <div className="text-xl font-medium text-[#ef4743]">
-                    <>{data.status ? data.error : "Wrong Answer"}</>
-                    {/* {data.error} */}
+                    <>{displayData.status ? displayData.error : "Wrong Answer"}</>
+                    {/* {displayData.error} */}
                   </div>
                 )}
                 <div className="ml-4 text-[#eff2f699]">
-                  Runtime: {Math.ceil(data.runtime)} ms
+                  Runtime: {Math.ceil(displayData.runtime)} ms
                 </div>
               </div>
-              {data.status && data.error === "Runtime Error" && (
+              {displayData.status && displayData.error === "Runtime Error" && (
                 <div className="group relative rounded-lg bg-[rgba(246,54,54,0.08)] px-3 py-4 dark:bg-[rgba(248,97,92,0.08)]">
                   <div className="line-break: anywhere;">
                     <div className="relative gap-2">
                       <div className="mb-6 align-middle">
                         <div className=" whitespace-pre-wrap break-all text-xs text-[#f8615c]">
-                          {data.data[0].stderr}
+                          {displayData.full_runtime_error}
                         </div>
                       </div>
                     </div>
@@ -115,7 +156,7 @@ const TestResult = ({ data, quesdata, Loading }) => {
                 </div>
               )}
               <div className="flex flex-wrap items-center gap-x-2 gap-y-4">
-                {data.data.map((val, index) => {
+                {displayData.data.length>=2&&displayData.data.map((val, index) => {
                   if (index >= 8) return null;
                   return (
                     <button
@@ -129,7 +170,7 @@ const TestResult = ({ data, quesdata, Loading }) => {
                     >
                       <div
                         className={`h-1 w-1 rounded-full ${
-                          data.data[index].testcasestatus
+                          displayData.data[index].testcasestatus
                             ? "bg-[#2cbb5d]"
                             : "bg-[#ef4743]"
                         }`}
@@ -142,7 +183,7 @@ const TestResult = ({ data, quesdata, Loading }) => {
               <div className="space-y-4">
                 <div>
                   <div className="mb-2 text-xs font-medium text-[#eff2f699]">
-                    Input
+                    {displayData.status && displayData.error === "Runtime Error" ? "Last Executed Input":"Input"}
                   </div>
                   <div className="space-y-2">
                     {quesdata.Inputname.map((val, i) => (
@@ -157,7 +198,7 @@ const TestResult = ({ data, quesdata, Loading }) => {
                           <div
                             className="z-base-1 hidden rounded border group-hover:block border-[#ffffff1a] bg-[#323232] absolute right-3 top-2.5"
                             onClick={() =>
-                              copyText(data.data[activecase].input[i])
+                              copyText(displayData.data[activecase].input[i])
                             }
                           >
                             <div className="relative cursor-pointer flex h-[22px] w-[22px] items-center justify-center bg-[#323232] hover:bg-[#ffffff14] rounded-[4px]">
@@ -165,21 +206,23 @@ const TestResult = ({ data, quesdata, Loading }) => {
                             </div>
                           </div>
                           <div className="mx-3 whitespace-pre-wrap break-all leading-5 text-white">
-                            <div>{data.data[activecase].input[i]}</div>
+                            <div>{displayData.data[activecase].input[i]}</div>
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
-                {data.data[activecase]?.stdout.length >= 1 && (
+                { !(displayData.status && displayData.error === "Runtime Error") &&
+                <>
+                {displayData.data[activecase]?.stdout.length >= 1 && (
                   <div className="flex h-full w-full flex-col space-y-2 ">
                     <div className="flex text-xs font-medium text-[#eff2f699]">
                       Stdout
                     </div>
                     <div className="group relative rounded-lg bg-[#ffffff12] ">
                       <div className="relative py-3 hide-scrollbar" id="Stdout">
-                        {/* {data.data[activecase].stdout.map((val) => (
+                        {/* {displayData.data[activecase].stdout.map((val) => (
                           <div className="font-menlo relative mx-3 whitespace-pre-wrap break-all leading-5 text-white">
                             {val}
                           </div>
@@ -195,9 +238,9 @@ const TestResult = ({ data, quesdata, Loading }) => {
                   <div className="group relative rounded-lg bg-[#ffffff12]">
                     <div className="relative py-3">
                       <div className="font-menlo relative mx-3 whitespace-pre-wrap break-all leading-5 text-white">
-                        {data.data[activecase].output === null
+                        {displayData.data[activecase].output === null
                           ? "Undefined"
-                          : data.data[activecase].output}
+                          : displayData.data[activecase].output}
                       </div>
                     </div>
                   </div>
@@ -209,13 +252,14 @@ const TestResult = ({ data, quesdata, Loading }) => {
                   <div className="group relative rounded-lg bg-[#ffffff12]">
                     <div className="relative py-3">
                       <div className="font-menlo relative mx-3 whitespace-pre-wrap break-all leading-5 text-white">
-                        {data.data[activecase].Expected === ""
+                        {displayData.data[activecase].Expected === ""
                           ? "undefined"
-                          : data.data[activecase].Expected}
+                          : displayData.data[activecase].Expected}
                       </div>
                     </div>
                   </div>
-                </div>
+                </div></>
+}
               </div>
             </div>
           </div>
