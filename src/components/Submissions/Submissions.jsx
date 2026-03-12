@@ -2,12 +2,15 @@ import React, { useEffect, useState, useMemo } from "react";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { Listbox, ListboxButton, ListboxOptions, ListboxOption, Transition } from "@headlessui/react";
 import { auth, db } from "../../Utils/Firebase";
+import NotesModal from "./NotesModal";
 
 const Submissions = ({ problemId, onSubmissionClick }) => {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState("Status");
   const [selectedLanguage, setSelectedLanguage] = useState("Language");
+  const [notesModalOpen, setNotesModalOpen] = useState(false);
+  const [selectedSubmissionForNotes, setSelectedSubmissionForNotes] = useState(null);
 
   const uid = auth.currentUser?.uid;
 
@@ -364,17 +367,72 @@ const Submissions = ({ problemId, onSubmissionClick }) => {
 
               {/* NOTES */}
               <div className="flex flex-1 text-sm text-[#eff1f6bf]">
-                <span className="hidden items-center gap-2 text-blue-500 group-hover:flex">
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M13 11h7a1 1 0 110 2h-7v7a1 1 0 11-2 0v-7H4a1 1 0 110-2h7V4a1 1 0 112 0v7z" />
-                  </svg>
-                  Notes
-                </span>
+                {submission.notes ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedSubmissionForNotes(submission);
+                      setNotesModalOpen(true);
+                    }}
+                    className="max-w-xs truncate text-left text-gray-300  transition-colors line-clamp-1"
+                  >
+                    {submission.notes}
+                  </button>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedSubmissionForNotes(submission);
+                      setNotesModalOpen(true);
+                    }}
+                    className="hidden items-center gap-2 text-blue-500 group-hover:flex hover:text-blue-400 transition-colors"
+                  >
+                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M13 11h7a1 1 0 110 2h-7v7a1 1 0 11-2 0v-7H4a1 1 0 110-2h7V4a1 1 0 112 0v7z" />
+                    </svg>
+                    Notes
+                  </button>
+                )}
               </div>
             </div>
           ))
         )}
       </div>
+
+      {/* NOTES MODAL */}
+      <NotesModal
+        isOpen={notesModalOpen}
+        onClose={() => {
+          setNotesModalOpen(false);
+          // Refresh submissions to show updated notes
+          if (uid && problemId) {
+            const fetchSubmissions = async () => {
+              try {
+                const submissionsRef = collection(
+                  db,
+                  "users",
+                  uid,
+                  "problemSubmissions",
+                  problemId,
+                  "submissions"
+                );
+                const q = query(submissionsRef, orderBy("submittedAt", "desc"));
+                const querySnapshot = await getDocs(q);
+                const submissionsData = querySnapshot.docs.map((doc) => ({
+                  id: doc.id,
+                  ...doc.data(),
+                }));
+                setSubmissions(submissionsData);
+              } catch (error) {
+                console.error(error);
+              }
+            };
+            fetchSubmissions();
+          }
+        }}
+        submission={selectedSubmissionForNotes}
+        problemId={problemId}
+      />
     </div>
   );
 };
