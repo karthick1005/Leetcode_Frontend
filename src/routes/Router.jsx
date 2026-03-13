@@ -1,8 +1,13 @@
 import Login from "../pages/Login/Login";
 import Problempage from "../pages/Problem/Problempage";
 import ProblemList from "../pages/ProblemList/problemList";
+import AdminPage from "../pages/Admin/AdminPage";
 
 const routes = [
+  {
+    path: "/admin",
+    element: <AdminPage />,
+  },
   {
     path: "/:Id",
     element: <Problempage />,

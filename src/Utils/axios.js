@@ -51,6 +51,16 @@ const postRequest = async (url, data) => {
     }
 };
 
+const putRequest = async (url, data) => {
+    try {
+        const response = await axios.put(
+            hosturl + url,
+            data
+        );
+        return { success: true, data: response.data };
+    } catch (error) {
+        return { success: false, error: error.response.data };
+    }
+};
 
-
-export { getRequest, postRequest };
+export { getRequest, postRequest, putRequest };
