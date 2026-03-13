@@ -20,18 +20,19 @@ const TestResult = ({ data, quesdata, Loading }) => {
         input: testcase.input.split("\n"),
         output: testcase.output,
         Expected: testcase.expected,
-        stdout: rawData.std_output_list ? rawData.std_output_list[index].split('\n') : [],
+        stdout: rawData.std_output_list ? rawData.std_output_list[index]?.split('\n') || [] : [],
         testcasestatus: testcase.passed,
-        stderr: testcase.status === "Runtime Error" ? testcase.status : ""
+        stderr: testcase.status === "Runtime Error" ? testcase.status : (testcase.status === "Time Limit Exceeded" ? testcase.status : "")
       }));
 
       return {
         Accepted: rawData.correct_answer || false,
-        status: rawData.state === "WRONG_ANSWER" || rawData.status_msg !== "Accepted",
+        status: rawData.state === "WRONG_ANSWER" || rawData.state === "TIME_LIMIT_EXCEEDED" || rawData.state === "RUNTIME_ERROR" || rawData.status_msg !== "Accepted",
         error: rawData.status_msg || "Wrong Answer",
         runtime: rawData.elapsed_time || 0,
         data: transformedTestcases,
-        full_runtime_error:rawData.full_runtime_error || ""
+        full_runtime_error: rawData.full_runtime_error || "",
+        full_timeout_error: rawData.full_timeout_error || ""
       };
     }
 
