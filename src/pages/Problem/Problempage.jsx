@@ -383,7 +383,7 @@ const handleSubmissionClick = (submission) => {
           <Testcase data={data} testcase={Testcases} settestcase={setTestcases} />
         );
       case "Submissions":
-        return <Submissions problemId={Id} onSubmissionClick={handleSubmissionClick} />;
+        return <Submissions problemId={Id} onSubmissionClick={handleSubmissionClick} running={running} />;
       case "Editorial":
         return (
           <div style={{ padding: "20px", color: "#a0a0a0" }}>
@@ -579,7 +579,7 @@ const handleSubmissionClick = (submission) => {
     return "Wrong Answer";
   };
 
-  const Sumbitcode = async (testcase) => {
+  const Sumbitcode = async (runcode) => {
     console.log(uid)
     if(uid === undefined || uid === null) {
       showerror("Please login to submit code");
@@ -587,7 +587,7 @@ const handleSubmissionClick = (submission) => {
       return
     }
     setrunning(true);
-    
+    if(runcode){
     // Switch to Test Result tab
     const layoutJson = model.toJson();
     const testResultTabNode = findTabNodeByName(layoutJson.layout, "Test Result");
@@ -595,7 +595,7 @@ const handleSubmissionClick = (submission) => {
     if (testResultTabNode) {
       model.doAction(Actions.selectTab(testResultTabNode.id));
     }
-
+  }
     let code = currentcode;
     
     // Prepare testcases in the format the backend expects
@@ -612,7 +612,7 @@ const handleSubmissionClick = (submission) => {
     }
 
     // New data format for backend API
-    let data = {
+    let dataSend = {
       problemId: Id || "test-problem",
       language: language,
       userId: uid,
@@ -621,8 +621,9 @@ const handleSubmissionClick = (submission) => {
       quesId:Id || "test-problem"
     };
 
-    console.log("Submitting to backend:", data);
-    let resp = await postRequest("/submit", data);
+    console.log("Submitting to backend:", dataSend);
+    const url=runcode ? "/interpret_solution" : "/submit";
+    let resp = await postRequest(url, dataSend);
     
     if (!resp.success) {
       console.error("Submission failed:", resp.error);
@@ -647,12 +648,17 @@ const handleSubmissionClick = (submission) => {
     // Poll for completion
     const finalResult = await waitForCompletion(submissionId, 2); // Poll every 2 seconds
     
-    if (finalResult) {
+    if (finalResult && runcode) {
       setExecuteresult(finalResult);
       console.log("Final result:", finalResult);
 
       // Save submission to Firestore with new result structure
-      const status = finalResult.status || "Unknown";
+     
+    } else {
+      // showerror("Failed to get submission result");
+    }
+    if(!runcode){
+       const status = finalResult.status || "Unknown";
       const submissionData = {
         code: code,
         language: language,
@@ -663,13 +669,11 @@ const handleSubmissionClick = (submission) => {
         testsPassed: finalResult?.passed 
           ? `${finalResult.passed}/${finalResult.total || finalResult.passed}`
           : "0/0",
+        Inputname:data.Inputname || []
       };
       
       await saveSubmissionToFirestore(submissionData);
-    } else {
-      showerror("Failed to get submission result");
     }
-
     setcooldown(true);
     setrunning(false);
     setTimeout(() => setcooldown(false), 10 * 1000);
@@ -743,6 +747,13 @@ const handleSubmissionClick = (submission) => {
                     <div className="w-[32px] h-[32px] relative rounded-lg cursor-pointer hover:bg-[#333333]">
                       <Layouticon />
                     </div>
+                    <button 
+                      onClick={() => navigate(`/admin/${Id}`)}
+                      className="w-[32px] h-[32px] relative rounded-lg cursor-pointer hover:bg-[#333333] flex items-center justify-center text-yellow-500 text-lg"
+                      title="Edit Problem (Admin)"
+                    >
+                      ⚙️
+                    </button>
                     <div className="w-[32px] h-[32px] relative rounded-lg cursor-pointer hover:bg-[#333333]">
                       <Settingicon />
                     </div>
@@ -776,7 +787,7 @@ const handleSubmissionClick = (submission) => {
                     </button>
                     <button
                       className="w-[77px] h-[32px] relative rounded-none cursor-pointer bg-[#222222] hover:bg-[#2F2F2F]  items-center justify-center inline-flex py-[6px] px-[12px]"
-                      onClick={() => Sumbitcode(false)}
+                      onClick={() => Sumbitcode(true)}
                     >
                       <div className="w-[20px] h-[20px] relative mr-[8px]">
                         <PlayButton />
@@ -785,7 +796,7 @@ const handleSubmissionClick = (submission) => {
                     </button>
                     <button
                       className="rounded-tr-[8px] rounded-br-[8px] w-[97px] h-[32px] relative rounded-none cursor-pointer bg-[#222222] hover:bg-[#2F2F2F]  items-center justify-center inline-flex py-[6px] px-[12px] text-[#28c244]"
-                      onClick={() => Sumbitcode(true)}
+                      onClick={() => Sumbitcode(false)}
                     >
                       <div className="w-[20px] h-[20px] relative mr-[8px]">
                         <Uploadbutton />

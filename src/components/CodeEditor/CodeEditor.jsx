@@ -80,7 +80,7 @@ const Dropdown = ({ language, setlanguage }) => {
   );
 };
 
-const CodeEditor = ({ code, setcurrentcode, language, setlanguage }) => {
+const CodeEditor = ({ code, setcurrentcode, language, setlanguage, singlecode=false }) => {
   const [autocomplete, setautocomplete] = useState(false);
   // const [language, setlanguage] = useState("javascript");
   const monacoref = useRef();
@@ -195,6 +195,7 @@ const CodeEditor = ({ code, setcurrentcode, language, setlanguage }) => {
   const darkPlusTheme = Editortheme;
   const onMount = async (editor) => {
     monacoref.current = editor;
+    if(!singlecode){
     editor.focus();
     if (!autocomplete) {
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => {});
@@ -205,6 +206,7 @@ const CodeEditor = ({ code, setcurrentcode, language, setlanguage }) => {
     });
     setcurrentcode(editor.getValue());
     loadgrammer(editor);
+  }
   };
   const loadgrammer = async (editor) => {
     // Load the Oniguruma WASM for advanced regex support
@@ -421,11 +423,19 @@ const CodeEditor = ({ code, setcurrentcode, language, setlanguage }) => {
   }, [language]);
   return (
     <div className="editorcss">
+       {!singlecode&&
       <div className="h-[32px] relative overflow-visible">
         {/* hello */}
+       
         <Dropdown setlanguage={setlanguage} language={language} />
+       
       </div>
-      <div className="relative min-h-0 h-[100%]">
+       }
+     <div
+  className={`relative min-h-0 h-[100%] ${
+    singlecode ? "pointer-events-none" : ""
+  }`}
+>
         <Editor
           // height={"100vh"}
           // width={"100vw"}
@@ -436,6 +446,9 @@ const CodeEditor = ({ code, setcurrentcode, language, setlanguage }) => {
           theme="leetcode-theme"
           onMount={onMount}
           options={{
+              automaticLayout: true,
+
+            readOnly: singlecode,
             hover: {
               enabled: false,
             },
@@ -450,16 +463,19 @@ const CodeEditor = ({ code, setcurrentcode, language, setlanguage }) => {
             scrollBeyondLastLine: false,
             wordBasedSuggestions: "off",
           }}
+          
           loading=""
           onChange={(e) => setcurrentcode(e)}
         />
       </div>
+      {!singlecode&&
       <div className="flex h-9 items-center justify-between px-3 py-2  text-[#AFAFAF] text-[12px]">
         <div>Saved</div>
         <div>
           Ln {currentline} , Col {currentcol}
         </div>
       </div>
+}
     </div>
   );
 };

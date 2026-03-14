@@ -4,7 +4,7 @@ import { Listbox, ListboxButton, ListboxOptions, ListboxOption, Transition } fro
 import { auth, db } from "../../Utils/Firebase";
 import NotesModal from "./NotesModal";
 
-const Submissions = ({ problemId, onSubmissionClick }) => {
+const Submissions = ({ problemId, onSubmissionClick,running }) => {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState("Status");
@@ -33,7 +33,9 @@ const Submissions = ({ problemId, onSubmissionClick }) => {
 
     const fetchSubmissions = async () => {
       try {
-        setLoading(true);
+        if(submissions.length===0){
+          setLoading(true);
+        }
 
         const submissionsRef = collection(
           db,
@@ -61,7 +63,7 @@ const Submissions = ({ problemId, onSubmissionClick }) => {
     };
 
     fetchSubmissions();
-  }, [uid, problemId]);
+  }, [uid, problemId,running]);
 
   const getRelativeTime = (timestamp) => {
     if (!timestamp) return "";
@@ -330,7 +332,7 @@ const Submissions = ({ problemId, onSubmissionClick }) => {
             >
               {/* ID */}
               <div className="w-8 shrink-0 text-xs text-[#eff1f6bf]">
-                {submissions.indexOf(submission) + 1}
+                {filteredSubmissions.length-filteredSubmissions.indexOf(submission)}
               </div>
 
               {/* STATUS */}

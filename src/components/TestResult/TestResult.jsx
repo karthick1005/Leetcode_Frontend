@@ -27,11 +27,11 @@ const TestResult = ({ data, quesdata, Loading }) => {
 
       return {
         Accepted: rawData.correct_answer || false,
-        status: rawData.state === "WRONG_ANSWER" || rawData.state === "TIME_LIMIT_EXCEEDED" || rawData.state === "RUNTIME_ERROR" || rawData.status_msg !== "Accepted",
+        status: rawData.state === "WRONG_ANSWER" ||rawData.state==="COMPILATION_ERROR" || rawData.state === "TIME_LIMIT_EXCEEDED" || rawData.state === "RUNTIME_ERROR" || rawData.status_msg !== "Accepted",
         error: rawData.status_msg || "Wrong Answer",
         runtime: rawData.elapsed_time || 0,
         data: transformedTestcases,
-        full_runtime_error: rawData.full_runtime_error || "",
+        full_runtime_error: rawData.full_runtime_error ||rawData.full_compile_error|| "",
         full_timeout_error: rawData.full_timeout_error || ""
       };
     }
@@ -143,7 +143,7 @@ const TestResult = ({ data, quesdata, Loading }) => {
                   Runtime: {Math.ceil(displayData.runtime)} ms
                 </div>
               </div>
-              {displayData.status && displayData.error === "Runtime Error" && (
+              {displayData.status && displayData.error === "Runtime Error" || displayData.error === "Compilation Error" && (
                 <div className="group relative rounded-lg bg-[rgba(246,54,54,0.08)] px-3 py-4 dark:bg-[rgba(248,97,92,0.08)]">
                   <div className="line-break: anywhere;">
                     <div className="relative gap-2">
@@ -181,6 +181,7 @@ const TestResult = ({ data, quesdata, Loading }) => {
                   );
                 })}
               </div>
+              {displayData.error !=="Compilation Error" && (
               <div className="space-y-4">
                 <div>
                   <div className="mb-2 text-xs font-medium text-[#eff2f699]">
@@ -262,6 +263,7 @@ const TestResult = ({ data, quesdata, Loading }) => {
                 </div></>
 }
               </div>
+              )}
             </div>
           </div>
         </div>

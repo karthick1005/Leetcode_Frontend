@@ -66,17 +66,13 @@ const AdminPage = () => {
           });
           setLanguages(prev => ({ ...prev, ...decoded }));
         }
-
-        if (problem.Testcases && problem.Testcases.length > 0) {
-          const formattedTestcases = [];
-          for (let i = 0; i < problem.Testcases.length; i += 2) {
-            formattedTestcases.push({
-              input: problem.Testcases[i] || '',
-              expected: problem.Testcases[i + 1] || ''
-            });
-          }
-          setTestcases(formattedTestcases.length > 0 ? formattedTestcases : [{ input: '', expected: '' }]);
-        }
+         const updatedTestcases = problem.Testcases.map(tc => ({
+          input: tc.input,
+          expected: tc.expected
+        }));
+        console.log("Loaded testcases:", updatedTestcases);
+          setTestcases(updatedTestcases.length > 0 ? updatedTestcases : [{ input: '', expected: '' }]);
+     
 
         setMessage('✅ Problem loaded successfully!');
       } else {
